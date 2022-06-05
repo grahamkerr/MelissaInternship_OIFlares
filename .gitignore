@@ -1,0 +1,10 @@
+# Figures
+*.png
+*.eps
+*.mp4
+
+# Fits Files
+*.fits
+
+# PKL Files
+*.pkl
