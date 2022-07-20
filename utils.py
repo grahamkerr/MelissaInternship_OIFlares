@@ -46,6 +46,118 @@ def mgaussian_model_6term(p, x, ncomp):
           
 #############################################################################
 #############################################################################
+
+
+def IRIS_SG_BasicErrors(data, 
+                       wreg = 'NUV',
+                       exptime = [-0.0],
+                       verbose = False,
+                       sitnstare = False,
+                      ):
+  '''
+  Graham Kerr
+  NASA/GSFC
+  July 2022
+
+  NAME:            IRIS_SG_BasicErrors.py
+
+  PURPOSE:         Calculates the IRIS SG photon counting and dark current errors.  
+
+  INPUTS:     data -- An IRIS SG array [ypos, slitpos, wavelength], in DN/px
+              wreg -- A keyword to set the wavelength region, either 'NUV' or 'FUV'. 
+                      This defauls to 'NUV', so be careful 
+              exptime -- An array, same size as data, containing the exposure times
+                
+  OUTPUTS:     err_dn -- An array holding the errors in DN/px
+               err_dn_s -- An array holding the errors in DN/s/px (if exptime is provided).
+               
+  KEYWORDS: sitnstare -- set if a sit-and-stare observation
+
+  NOTES: The gains and elec_per_phot values are below were from the IRIS instrument paper.
+
+
+  '''
+
+  ##
+  ## Some dimenions
+  ##
+  if sitnstare == False:
+    ny = (data.shape)[0]
+    nslit = (data.shape)[1]
+    nwvl = (data.shape)[2]
+    dc_err_phot_arr = np.zeros([ny, nslit, nwvl], dtype = np.float)
+  elif sitnstare == True: 
+      ny = (data.shape)[0]
+      ntime = (data.shape)[1]
+      nwvl = (data.shape)[2]
+      dc_err_phot_arr = np.zeros([ny, ntime, nwvl], dtype = np.float)
+     
+  ##
+  ## Set the variables, depending if we are dealing with NUV or FUV?
+  ##    
+  # There are X electrons released per photon (elec_per_phot). It takes Y electrons to produce a DN
+  # From that we can compute the number of DNs produced by each photon DN_per_phot. These vary for
+  # each detector. The dark current uncertainty also varies
+  if wreg == 'NUV':
+      elec_per_phot = 1.0
+      gain = 18.0
+      dc_err = 1.2 #DN/px
+      if verbose == True:
+          print('NUV values used for DN2phot conversion')
+  elif wreg == 'FUV':
+      elec_per_phot = 1.5
+      gain = 6.0
+      dc_err = 3.1 #DN/px
+      if verbose == True:
+          print('FUV values used for DN2phot conversion')
+  
+  dn_per_phot = elec_per_phot/gain
+
+  ##
+  ## Convert dark current to photons/px
+  ##
+  dc_err_phot = dc_err/dn_per_phot
+  
+  dc_err_phot_arr[:,:,:] = dc_err_phot
+  
+
+  ##
+  ## Convert the data array to photons/px
+  ## Set negative values to zero, so that they don't appear in the sqrt. 
+  ## For these pixels only the readout error is considered.
+  ##
+  data_phot = data/dn_per_phot
+  # indices = data_phot < 0
+  # data_phot[indices] = 0
+
+  ##
+  ## Total error is the combination of photon counting and dark current
+  ##
+  err_phot = np.sqrt(np.abs(data_phot) + dc_err_phot_arr**2.0)
+
+  ##
+  ## Convert error from photon/px to DN/px
+  ##
+  err_dn = err_phot*dn_per_phot
+
+  ##
+  ## Convert error from DN/px to DN/s/px, if exptime =/= 0, else return a 0 array
+  ##
+  if sitnstare == False:
+    err_dn_s = np.zeros([ny,nslit,nwvl])
+    if exptime[0] != -10:
+        for sind in range(nslit):
+            err_dn_s[:,sind,:] = err_dn[:,sind,:]/exptime[sind]
+  else:
+      err_dn_s = np.zeros([ny,ntime,nwvl])
+      if exptime[0] != -10:
+          for tind in range(ntime):
+              err_dn_s[:,tind,:] = err_dn[:,tind,:]/exptime[tind]
+  
+  return err_dn, err_dn_s
+
+#############################################################################
+#############################################################################
 # Graham Kerr
 # NASA/GSFC
 # 1st July 2019
